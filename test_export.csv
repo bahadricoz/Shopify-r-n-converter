@@ -1,0 +1,9 @@
+Handle,Title,Body (HTML),Vendor,Type,Product Category,Tags,Published,Option1 Name,Option1 Value,Option2 Name,Option2 Value,Variant SKU,Variant Price,Variant Inventory Qty,Image Src,Variant Image
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,S,,,SKU-S,100.0,10,img1.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,S,,,SKU-S,100.0,10,img2.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,M,,,SKU-M,110.0,20,img3.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,M,,,SKU-M,110.0,20,img4.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,L,,,SKU-L,120.0,30,img5.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,L,,,SKU-L,120.0,30,img6.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,XL,,,SKU-XL,130.0,40,img7.jpg,
+belt-product,Ayarlanabilir Bel Kemeri,<p>Bel Kemeri</p>,Brand,Category,Product Cat,tag1,TRUE,Size,XL,,,SKU-XL,130.0,40,img8.jpg,
