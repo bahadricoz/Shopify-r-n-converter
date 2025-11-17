@@ -504,7 +504,7 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
                         barcode = str(row["Variant Barcode"])
                     elif "Barcode" in row and pd.notna(row["Barcode"]):
                         barcode = str(row["Barcode"])
-            if sale_price == 0.0:
+                if sale_price == 0.0:
                     if "Variant Price" in row and pd.notna(row["Variant Price"]):
                         try:
                             sale_price = float(row["Variant Price"])
