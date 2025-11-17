@@ -58,6 +58,14 @@ def normalize_google_category_value(value: Any) -> str:
     return str(value).strip()
 
 
+def order_prices(sale_price: float, discounted_price: float) -> tuple[float, float]:
+    """Ensure the higher value stays in Satış Fiyatı and lower in İndirimli Fiyatı."""
+
+    if discounted_price > sale_price:
+        return discounted_price, sale_price
+    return sale_price, discounted_price
+
+
 IKAS_COLUMNS_TEMPLATE = [
     "Ürün Grup ID",
     "Varyant ID",
@@ -313,7 +321,8 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
             
             # Satış Kanalı: Handle seviyesinde Status kontrolü
             satis_kanali = "VISIBLE"
-            
+            sale_price, discounted_price = order_prices(sale_price, discounted_price)
+
             # Basit ürün için TEK SATIR oluştur
             ikas_row = {
                 "Ürün Grup ID": "",  # Basit ürün için boş
@@ -495,7 +504,7 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
                         barcode = str(row["Variant Barcode"])
                     elif "Barcode" in row and pd.notna(row["Barcode"]):
                         barcode = str(row["Barcode"])
-                if sale_price == 0.0:
+            if sale_price == 0.0:
                     if "Variant Price" in row and pd.notna(row["Variant Price"]):
                         try:
                             sale_price = float(row["Variant Price"])
@@ -519,6 +528,8 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
             
             satis_kanali = "VISIBLE"
             
+            sale_price, discounted_price = order_prices(sale_price, discounted_price)
+
             ikas_row = {
                 "Ürün Grup ID": "",
                 "Varyant ID": "",
@@ -654,6 +665,8 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
 
             # Tedarikçi (Vendor'dan veya ayrı bir sütundan)
             tedarikci = common["Vendor"]
+
+            sale_price, discounted_price = order_prices(sale_price, discounted_price)
 
             # ikas satırı oluştur (tüm 37 sütun)
             ikas_row = {
