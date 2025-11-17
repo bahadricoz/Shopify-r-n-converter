@@ -1,6 +1,7 @@
 # Standard library imports
 import pathlib
-from typing import List, Set
+import numbers
+from typing import Any, List, Set
 
 import pandas as pd
 
@@ -18,6 +19,7 @@ SHOPIFY_COLUMNS = [
     "Status",  # Yeni: Satış Kanalı için
     "Option1 Name",
     "Option1 Value",
+    
     "Option2 Name",
     "Option2 Value",
     "Option3 Name",
@@ -42,6 +44,20 @@ SHOPIFY_COLUMNS = [
 ]
 
 # ikas sütun yapısı (kullanıcının belirttiği TAM VE KESİN liste - 37 sütun)
+def normalize_google_category_value(value: Any) -> str:
+    """Convert Google category values into normalized strings."""
+
+    if pd.isna(value):
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, numbers.Real):
+        if float(value).is_integer():
+            return str(int(value))
+        return str(value)
+    return str(value).strip()
+
+
 IKAS_COLUMNS = [
     "Ürün Grup ID",
     "Varyant ID",
@@ -163,9 +179,9 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
         # Google Ürün Kategorisi
         google_category = ""
         if "Google Shopping / Google Product Category" in group_df.columns and not group_df["Google Shopping / Google Product Category"].dropna().empty:
-            google_category = group_df["Google Shopping / Google Product Category"].dropna().iloc[0]
+            google_category = normalize_google_category_value(group_df["Google Shopping / Google Product Category"].dropna().iloc[0])
         elif "Google Product Category" in group_df.columns and not group_df["Google Product Category"].dropna().empty:
-            google_category = group_df["Google Product Category"].dropna().iloc[0]
+            google_category = normalize_google_category_value(group_df["Google Product Category"].dropna().iloc[0])
         
         # Tip (Type)
         tip_value = ""
@@ -404,32 +420,43 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                 # Hiç geçerli varyant bilgisi yoksa, bu satırı atla
                 continue
             
-            # Birleştirme anahtarı: Option Value'lar öncelikli, yoksa Variant SKU
-            # ÖNEMLİ: Option Value'ları normalize et (büyük/küçük harf duyarsız, whitespace temizle)
-            # Aynı varyant değeri farklı formatlarda olabilir (örn: "S" vs "S " vs "s")
+            # Birleştirme anahtarı: ÖNCE Variant SKU'ya göre kontrol et, sonra Option Value'lara göre
+            # ÖNEMLİ: Aynı Variant SKU'ya sahip satırlar aynı varyant olmalı (görsel için tekrarlanan satırlar)
+            # Strateji: Variant SKU varsa, onu birleştirme anahtarı olarak kullan
+            # Eğer Variant SKU yoksa, Option Value'lara göre grupla
+            
             normalized_option1 = option1_value.strip().upper() if option1_value else ""
             normalized_option2 = option2_value.strip().upper() if option2_value else ""
             normalized_sku = variant_sku.strip() if variant_sku else ""
             
-            if normalized_option1 or normalized_option2:
-                # Option Value'lar varsa, normalize edilmiş değerleri kullan
+            # ÖNEMLİ: Variant SKU varsa, onu birleştirme anahtarı olarak kullan (daha güvenilir)
+            # Aynı SKU'ya sahip satırlar aynı varyant olmalı (Option Value'lar farklı olsa bile)
+            if normalized_sku:
+                # Variant SKU varsa, onu kullan (Option Value'ları da sakla ama SKU öncelikli)
+                variant_key = ("SKU", normalized_sku)
+            elif normalized_option1 or normalized_option2:
+                # Variant SKU yoksa, Option Value'lara göre grupla
                 variant_key = (normalized_option1, normalized_option2)
-            elif normalized_sku:
-                # Option Value'lar yoksa ama Variant SKU varsa, onu kullan
-                variant_key = ("SKU_ONLY", normalized_sku)
             else:
                 # Bu duruma düşmemeli (yukarıdaki kontrol ile atlanmalı)
                 continue
             
             # Bu kombinasyon için ilk kez karşılaşıyorsak, yeni bir kayıt oluştur
             if variant_key not in variant_combinations:
-                # Orijinal değerleri sakla (ilk satırdan orijinal formatı koru)
-                # Normalize edilmiş değerler eşleştirme için, orijinal değerler kayıt için
+                # Orijinal değerleri sakla
+                # Eğer SKU bazlı gruplama yapıyorsak, Option Value'ları ilk boş olmayan değerden al
                 variant_combinations[variant_key] = {
-                    "Option1 Value": option1_value,  # Orijinal değer (normalize edilmeden önce)
-                    "Option2 Value": option2_value,  # Orijinal değer (normalize edilmeden önce)
+                    "Option1 Value": option1_value if option1_value else "",  # Orijinal değer
+                    "Option2 Value": option2_value if option2_value else "",  # Orijinal değer
+                    "Variant SKU": normalized_sku,  # SKU'yu da sakla
                     "rows": []  # Bu varyant için tüm satırları sakla
                 }
+            else:
+                # Bu kombinasyon zaten var, Option Value'ları güncelle (eğer boşsa ve yeni satırda varsa)
+                if not variant_combinations[variant_key]["Option1 Value"] and option1_value:
+                    variant_combinations[variant_key]["Option1 Value"] = option1_value
+                if not variant_combinations[variant_key]["Option2 Value"] and option2_value:
+                    variant_combinations[variant_key]["Option2 Value"] = option2_value
             
             # Bu satırı bu varyant kombinasyonuna ekle
             variant_combinations[variant_key]["rows"].append(row)
@@ -528,16 +555,34 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
             variant_rows = variant_data["rows"]
             option1_value = variant_data["Option1 Value"]
             option2_value = variant_data["Option2 Value"]
+            variant_sku_from_key = variant_data.get("Variant SKU", "")
             
             # İlk boş olmayan değerleri al (tüm satırlardan)
-            variant_sku = ""
+            variant_sku = variant_sku_from_key if variant_sku_from_key else ""
             barcode = ""
             sale_price = 0.0
             discounted_price = 0.0
             stock_qty = 0
             
+            # Option Value'ları tüm satırlardan topla (eğer variant_data'da boşsa)
+            if not option1_value:
+                for row in variant_rows:
+                    if "Option1 Value" in row and pd.notna(row["Option1 Value"]):
+                        val = str(row["Option1 Value"]).strip()
+                        if val and val.upper() != "DEFAULT TITLE":
+                            option1_value = val
+                            break
+            
+            if not option2_value:
+                for row in variant_rows:
+                    if "Option2 Value" in row and pd.notna(row["Option2 Value"]):
+                        val = str(row["Option2 Value"]).strip()
+                        if val and val.upper() != "DEFAULT TITLE":
+                            option2_value = val
+                            break
+            
             for row in variant_rows:
-                # Varyant SKU - ilk boş olmayan değeri al
+                # Varyant SKU - zaten variant_key'den alındı, ama yoksa satırdan al
                 if not variant_sku and "Variant SKU" in row and pd.notna(row["Variant SKU"]):
                     variant_sku = str(row["Variant SKU"]).strip()
                     if not variant_sku:  # Boş string ise devam et
