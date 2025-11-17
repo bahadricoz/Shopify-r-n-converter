@@ -188,9 +188,10 @@ def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.D
         seo_title = ""
         seo_description = ""
         if "SEO Title" in group_df.columns and not group_df["SEO Title"].dropna().empty:
-            seo_title = group_df["SEO Title"].dropna().iloc[0]
+            seo_title = str(group_df["SEO Title"].dropna().iloc[0])
         if "SEO Description" in group_df.columns and not group_df["SEO Description"].dropna().empty:
-            seo_description = group_df["SEO Description"].dropna().iloc[0]
+            seo_description = str(group_df["SEO Description"].dropna().iloc[0])
+        seo_description = seo_description[:320]
         
         # Google Ürün Kategorisi
         google_category = ""
