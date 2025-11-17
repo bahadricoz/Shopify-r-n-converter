@@ -58,7 +58,7 @@ def normalize_google_category_value(value: Any) -> str:
     return str(value).strip()
 
 
-IKAS_COLUMNS = [
+IKAS_COLUMNS_TEMPLATE = [
     "Ürün Grup ID",
     "Varyant ID",
     "İsim",
@@ -91,15 +91,20 @@ IKAS_COLUMNS = [
     "Google Ürün Kategorisi",
     "Tedarikçi",
     "Stoğu Tükenince Satmaya Devam Et",
-    "Satış Kanalı:belix",
-    "Sepet Başına Minimum Alma Adeti:belix",
+    "Satış Kanalı:{store_name}",
+    "Sepet Başına Minimum Alma Adeti:{store_name}",
     "Sepet Başına Maksimum Alma Adeti:belix",
     "Varyant Aktiflik",
     "Oluşturulma Tarihi",
 ]
 
 
-def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
+def build_ikas_columns(store_name: str) -> List[str]:
+    normalized_store_name = store_name.strip() if store_name and store_name.strip() else "belix"
+    return [column.format(store_name=normalized_store_name) for column in IKAS_COLUMNS_TEMPLATE]
+
+
+def shopify_to_ikas_converter(file_path: str, store_name: str = "belix") -> pd.DataFrame:
     """Read a Shopify export file and convert it into the ikas schema.
 
     Bu fonksiyon aşağıdaki özel kurallara uyar:
@@ -117,13 +122,16 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
     11. Resim URL (Image Src + Variant Image) toplanıp noktalı virgülle birleştirilir ve tüm satırlarda (basit+varyantlı) tekrarlanır
     12. Metadata: SEO Title → Metadata Başlık, SEO Description → Metadata Açıklama
     13. Barkod Listesi: Variant Barcode veya Barcode sütunundan alınır
-    14. Satış Kanalı:belix: Status/Published "Active" ise TÜM satırlara (basit+varyantlı) "VISIBLE" yazılır
+    14. Satış Kanalı:<mağaza adı>: Her satırda "VISIBLE" yazılır
     15. Varyant Aktiflik: Boş bırakılır
 
     Parameters
     ----------
     file_path : str
         Absolute or relative path to a Shopify export file in CSV or XLSX format.
+    store_name : str, optional
+        Mağaza/satış kanalı adı; `Satış Kanalı:<store_name>` ve
+        `Sepet Başına Minimum Alma Adeti:<store_name>` sütunları bu isimle oluşturulur.
 
     Returns
     -------
@@ -234,7 +242,11 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
         image_urls[handle] = ";".join(sorted(image_urls_set)) if image_urls_set else ""
 
     # Yeni DataFrame oluştur
+    store_name_value = store_name.strip() if store_name and store_name.strip() else "belix"
     ikas_rows = []
+
+    sales_channel_column = f"Satış Kanalı:{store_name_value}"
+    min_order_column = f"Sepet Başına Minimum Alma Adeti:{store_name_value}"
 
     for handle, group_df in handle_groups:
         # Grup ID (Handle'ı kullan, benzersiz olması için)
@@ -300,7 +312,7 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                             pass
             
             # Satış Kanalı: Handle seviyesinde Status kontrolü
-            satis_kanali = "VISIBLE" if handle_status[handle] else ""
+            satis_kanali = "VISIBLE"
             
             # Basit ürün için TEK SATIR oluştur
             ikas_row = {
@@ -336,8 +348,8 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                 "Google Ürün Kategorisi": common["Google Category"],
                 "Tedarikçi": common["Vendor"],
                 "Stoğu Tükenince Satmaya Devam Et": "",  # Boş
-                "Satış Kanalı:belix": satis_kanali,  # Status/Published "Active" ise "VISIBLE"
-                "Sepet Başına Minimum Alma Adeti:belix": "",  # Boş
+                sales_channel_column: satis_kanali,  # Her satıra VISIBLE
+                min_order_column: "",  # Boş
                 "Sepet Başına Maksimum Alma Adeti:belix": "",  # Boş
                 "Varyant Aktiflik": "",  # Boş bırak
                 "Oluşturulma Tarihi": common["Created At"],
@@ -351,7 +363,7 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
         # Çözüm: Aynı varyant değerlerine (Option1 Value + Option2 Value) sahip satırları tek satırda birleştir
         
         # Satış Kanalı: Handle seviyesinde Status kontrolü
-        satis_kanali = "VISIBLE" if handle_status[handle] else ""
+        satis_kanali = "VISIBLE"
         
         # Varyant Tip'leri tüm satırlarda tekrarlamak için, önce tüm varyant tiplerini topla
         variant_type_1 = ""
@@ -505,7 +517,7 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                         except (ValueError, TypeError):
                             pass
             
-            satis_kanali = "VISIBLE" if handle_status[handle] else ""
+            satis_kanali = "VISIBLE"
             
             ikas_row = {
                 "Ürün Grup ID": "",
@@ -540,8 +552,8 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                 "Google Ürün Kategorisi": common["Google Category"],
                 "Tedarikçi": common["Vendor"],
                 "Stoğu Tükenince Satmaya Devam Et": "",
-                "Satış Kanalı:belix": satis_kanali,
-                "Sepet Başına Minimum Alma Adeti:belix": "",
+                sales_channel_column: satis_kanali,
+                min_order_column: "",
                 "Sepet Başına Maksimum Alma Adeti:belix": "",
                 "Varyant Aktiflik": "",
                 "Oluşturulma Tarihi": common["Created At"],
@@ -677,8 +689,8 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
                 "Google Ürün Kategorisi": common["Google Category"],
                 "Tedarikçi": tedarikci,
                 "Stoğu Tükenince Satmaya Devam Et": "",  # Boş
-                "Satış Kanalı:belix": satis_kanali,  # Handle seviyesinde Status kontrolü - TÜM satırlara yazılır
-                "Sepet Başına Minimum Alma Adeti:belix": "",  # Boş
+                sales_channel_column: satis_kanali,  # Handle seviyesinde Status kontrolü - TÜM satırlara yazılır
+                min_order_column: "",  # Boş
                 "Sepet Başına Maksimum Alma Adeti:belix": "",  # Boş
                 "Varyant Aktiflik": variant_aktiflik,  # Boş bırak
                 "Oluşturulma Tarihi": common["Created At"],
@@ -687,7 +699,7 @@ def shopify_to_ikas_converter(file_path: str) -> pd.DataFrame:
             ikas_rows.append(ikas_row)
 
     # DataFrame oluştur
-    ikas_df = pd.DataFrame(ikas_rows, columns=IKAS_COLUMNS)
+    ikas_df = pd.DataFrame(ikas_rows, columns=build_ikas_columns(store_name_value))
 
     # NOT: Basit ürünler zaten tek satırda birleştirilmiş durumda
     # Varyantlı olmayan ürünler için ek kontrol yapılmasına gerek yok
